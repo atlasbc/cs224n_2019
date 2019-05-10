@@ -51,12 +51,12 @@ class PartialParse(object):
         ###         1. Shift
         ###         2. Left Arc
         ###         3. Right Arc
-        if transition == "S":
+        if transition == "S" and (len(self.buffer) >= 1):
             self.stack.append(self.buffer.pop(0))
-        elif transition == "LA":
+        elif transition == "LA" and (len(self.stack) >= 2):
             self.dependencies.append((self.stack[-1], self.stack[-2]))
             self.stack.pop(-2)
-        elif transition == "RA":
+        elif transition == "RA" and (len(self.stack) >= 2):
             self.dependencies.append(((self.stack[-2], self.stack[-1])))
             self.stack.pop(-1)
         ### END YOUR CODE
@@ -110,14 +110,14 @@ def minibatch_parse(sentences, model, batch_size):
     ###             is being accessed by `partial_parses` and may cause your code to crash.
     partial_parses = [PartialParse(sentence) for sentence in sentences]
     unfinished_parses = partial_parses[:]
-    
     while unfinished_parses:
-        batch_prediction = model.predict(unfinished_parses[:batch_size])
+        transitions = model.predict(unfinished_parses[:batch_size])
         for idx, parse in enumerate(unfinished_parses[:batch_size]):
-            parse.parse_step(batch_prediction[idx])            
+            parse.parse_step(transitions[idx])
             if (len(parse.stack) == 1) and (len(parse.buffer) == 0): # sentence is parsed
-                unfinished_parses.pop(idx)
-    dependencies = [parse.dependencies for parse in partial_parses]      
+                unfinished_parses.remove(parse)                
+    dependencies = [parse.dependencies for parse in partial_parses]
+    
     ### END YOUR CODE
 
     return dependencies
