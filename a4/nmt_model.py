@@ -74,8 +74,8 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/nn.html#torch.nn.Dropout
         self.encoder = nn.LSTM(embed_size, self.hidden_size, 1, bidirectional = True)  #(Bidirectional LSTM with bias)
         self.decoder = nn.LSTMCell(embed_size, self.hidden_size) #(LSTM Cell with bias)
-        self.h_projection = nn.Linear(2*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{h} in the PDF.
-        self.c_projection = nn.Linear(2*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{c} in the PDF.
+        self.h_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{h} in the PDF.
+        self.c_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{c} in the PDF.
         self.att_projection = nn.Linear(2*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{attProj} in the PDF.
         self.combined_output_projection = nn.Linear(3*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{u} in the PDF.
         self.target_vocab_projection = nn.Linear(self.hidden_size, 1, bias = False)#(Linear Layer with no bias), called W_{vocab} in the PDF.
@@ -169,8 +169,25 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.cat
         ###     Tensor Permute:
         ###         https://pytorch.org/docs/stable/tensors.html#torch.Tensor.permute
-
-
+        
+        # use embeddings for each sentence in the batch
+        X = self.model_embeddings.source(source_padded) # should be shape of (src_len, batch_size, embed_dim)
+        
+        # pack X to get real final hiddens
+        packed_X = torch.nn.utils.rnn.pack_padded_sequence(X, source_lengths)
+        # apply encoder
+        enc_hidden_packed, (h_n, c_n) =  self.encoder(packed_X)
+        
+        #get padded encoder hidden states from packed sequence object 
+        enc_hiddens = torch.nn.utils.rnn.pad_packed_sequence(enc_hidden_packed)[0]
+        
+        #rearrange encoder hidden layers, h_n, c_n
+        enc_hiddens = enc_hiddens.permute(1,0,2)
+        h_n, c_n = torch.cat((h_n[0, :, :], h_n[1, :, :]), dim=1), torch.cat((c_n[0, :, :], c_n[1, :, :]), dim=1)
+        
+        # compute decoder initial states
+        dec_init_state = (self.h_projection(h_n), self.c_projection(c_n))
+        
         ### END YOUR CODE
 
         return enc_hiddens, dec_init_state
