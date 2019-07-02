@@ -73,12 +73,12 @@ class NMT(nn.Module):
         ###     Dropout Layer:
         ###         https://pytorch.org/docs/stable/nn.html#torch.nn.Dropout
         self.encoder = nn.LSTM(embed_size, self.hidden_size, 1, bidirectional = True)  #(Bidirectional LSTM with bias)
-        self.decoder = nn.LSTMCell(embed_size, self.hidden_size) #(LSTM Cell with bias)
+        self.decoder = nn.LSTMCell(self.hidden_size + embed_size, self.hidden_size) #(LSTM Cell with bias)
         self.h_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{h} in the PDF.
         self.c_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{c} in the PDF.
         self.att_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{attProj} in the PDF.
-        self.combined_output_projection = nn.Linear(3*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{u} in the PDF.
-        self.target_vocab_projection = nn.Linear(self.hidden_size, 1, bias = False)#(Linear Layer with no bias), called W_{vocab} in the PDF.
+        self.combined_output_projection = nn.Linear(3*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{u} in the PDF.
+        self.target_vocab_projection = nn.Linear(self.hidden_size, len(self.vocab.tgt), bias = False)#(Linear Layer with no bias), called W_{vocab} in the PDF.
         self.dropout = nn.Dropout(p = self.dropout_rate) #(Dropout Layer)
 
         ### END YOUR CODE
@@ -331,10 +331,16 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.unsqueeze
         ###     Tensor Squeeze:
         ###         https://pytorch.org/docs/stable/torch.html#torch.squeeze
-
+        
+        # calculate new decoder hidden and cell state
+        dec_state = self.decoder(Ybar_t, dec_state)
+        dec_hidden, dec_cell = dec_state
+        
+        #calculate attention score with broadcasting
+        e_t = torch.bmm(enc_hiddens_proj, dec_hidden.unsqueeze(dim=-1)).squeeze(dim=-1)
 
         ### END YOUR CODE
-
+        
         # Set e_t to -inf where enc_masks has 1
         if enc_masks is not None:
             e_t.data.masked_fill_(enc_masks.byte(), -float('inf'))
@@ -366,7 +372,12 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.cat
         ###     Tanh:
         ###         https://pytorch.org/docs/stable/torch.html#torch.tanh
-
+        
+        alpha_t = F.softmax(e_t, dim=1)
+        a_t = torch.bmm(alpha_t.unsqueeze(dim=1), enc_hiddens).squeeze(dim=1)
+        U_t = torch.cat((dec_hidden, a_t), dim=1)
+        V_t = self.combined_output_projection(U_t)
+        O_t = self.dropout(torch.tanh(V_t))
 
         ### END YOUR CODE
 
