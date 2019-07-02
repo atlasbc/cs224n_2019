@@ -76,7 +76,7 @@ class NMT(nn.Module):
         self.decoder = nn.LSTMCell(embed_size, self.hidden_size) #(LSTM Cell with bias)
         self.h_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{h} in the PDF.
         self.c_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{c} in the PDF.
-        self.att_projection = nn.Linear(2*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{attProj} in the PDF.
+        self.att_projection = nn.Linear(2*self.hidden_size, self.hidden_size, bias = False) #(Linear Layer with no bias), called W_{attProj} in the PDF.
         self.combined_output_projection = nn.Linear(3*self.hidden_size, 1, bias = False) #(Linear Layer with no bias), called W_{u} in the PDF.
         self.target_vocab_projection = nn.Linear(self.hidden_size, 1, bias = False)#(Linear Layer with no bias), called W_{vocab} in the PDF.
         self.dropout = nn.Dropout(p = self.dropout_rate) #(Dropout Layer)
@@ -256,8 +256,25 @@ class NMT(nn.Module):
         ###         https://pytorch.org/docs/stable/torch.html#torch.cat
         ###     Tensor Stacking:
         ###         https://pytorch.org/docs/stable/torch.html#torch.stack
-
-
+        
+        #get attention projection layer
+        enc_hiddens_proj = self.att_projection(enc_hiddens)
+        
+        #construct tensor Y 
+        Y = self.model_embeddings.target(target_padded)
+        
+        #iterate over time steps
+        timesteps = torch.split(Y, 1)
+        for t in timesteps:
+            Y_t = t.squeeze(dim=0)
+            Ybar_t = torch.cat((Y_t, o_prev), dim=1)
+            dec_state, o_t, _ = self.step(Ybar_t, dec_state, enc_hiddens, enc_hiddens_proj, enc_masks)
+            combined_outputs.append(o_t)
+            o_prev = o_t
+            
+        #combine timesteps into one tensor    
+        combined_outputs = torch.stack(combined_outputs)
+        
         ### END YOUR CODE
 
         return combined_outputs
