@@ -40,8 +40,21 @@ def pad_sents_char(sents, char_pad_token):
     ###
     ###     You should NOT use the method `pad_sents()` below because of the way it handles
     ###     padding and unknown words.
-
-
+    batch_size = len(sents)
+    max_sentence_length = max(len(s) for s in sents)
+    sents_padded = []
+    
+    for s in sents:
+        padded = [[char_pad_token]*max_word_length] * max_sentence_length
+        padded[:len(s)] = s
+        
+        for idx, word in enumerate(padded[:len(s)]): # a word is list of char indices
+            padded_word = [char_pad_token] * max_word_length
+            padded_word[:len(word)] = word[:max_word_length]
+            padded[idx] = padded_word
+            
+        sents_padded.append(padded)
+        
     ### END YOUR CODE
 
     return sents_padded
@@ -60,8 +73,13 @@ def pad_sents(sents, pad_token):
     sents_padded = []
 
     ### COPY OVER YOUR CODE FROM ASSIGNMENT 4
+    max_len = max(len(s) for s in sents)
+    batch_size = len(sents)
 
-
+    for s in sents:
+        padded = [pad_token] * max_len
+        padded[:len(s)] = s
+        sents_padded.append(padded)
     ### END YOUR CODE FROM ASSIGNMENT 4
 
     return sents_padded
