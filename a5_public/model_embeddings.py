@@ -17,8 +17,8 @@ import torch.nn as nn
 #   `Highway` in the file `highway.py`
 # Uncomment the following two imports once you're ready to run part 1(j)
 
-# from cnn import CNN
-# from highway import Highway
+from cnn import CNN
+from highway import Highway
 
 # End "do not change" 
 
@@ -40,7 +40,12 @@ class ModelEmbeddings(nn.Module):
         ## End A4 code
 
         ### YOUR CODE HERE for part 1j
-
+        pad_token_idx = vocab.char2id['<pad>']
+        self.embed_size = embed_size
+        self.embeddings = nn.Embedding(len(vocab.char2id), embed_size, padding_idx=pad_token_idx)
+        self.cnn = CNN(embed_size, embed_size) #how to get char_embed_size?
+        self.highway = Highway(embed_size)
+        
 
         ### END YOUR CODE
 
@@ -57,9 +62,24 @@ class ModelEmbeddings(nn.Module):
         # output = self.embeddings(input)
         # return output
         ## End A4 code
-
+        
         ### YOUR CODE HERE for part 1j
-
+        
+        #add embeddings to input
+        input = self.embeddings(input)
+        
+        #make size appropriate to CNN
+        input = input.permute(0, 1, 3, 2)
+        sentence_length, batch_size, embed_size, max_word_length = input.size()
+        input = input.view(-1, embed_size, max_word_length)
+        
+        # put through cnn and highway networks
+        output = self.highway(self.cnn(input))
+        
+        # reshape into appropriate size
+        output = output.view(sentence_length, batch_size, -1)
+        
+        return output
 
         ### END YOUR CODE
 

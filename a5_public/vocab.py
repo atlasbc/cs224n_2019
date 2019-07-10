@@ -173,12 +173,12 @@ class VocabEntry(object):
         sents = self.words2charindices(sents)
         
         #pad sentences and words
-        sents_padded = pad_sents_char(sents)
+        sents_padded = pad_sents_char(sents, self.char2id['<pad>'])
         
         # pad_sents_char > (batch_size, max_sentence_length, max_word_length)
         # adjust dimensions
-        sents_var = torch.stack(sents_padded).permute((1, 0, 2))
-        
+        sents_var = torch.tensor(sents_padded, dtype = torch.long, device = device)
+        sents_var = sents_var.permute(1, 0, 2)
         return sents_var
         ### END YOUR CODE
 
