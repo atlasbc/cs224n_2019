@@ -27,7 +27,12 @@ class CharDecoder(nn.Module):
         ### Hint: - Use target_vocab.char2id to access the character vocabulary for the target language.
         ###       - Set the padding_idx argument of the embedding matrix.
         ###       - Create a new Embedding layer. Do not reuse embeddings created in Part 1 of this assignment.
-        
+        super(CharDecoder, self).__init__()
+        self.target_vocab = target_vocab
+        pad_token_idx = self.target_vocab.char2id['<pad>']
+        self.charDecoder = nn.LSTM(char_embedding_size, hidden_size)
+        self.char_output_projection = nn.Linear(hidden_size, len(self.target_vocab.char2id))
+        self.decoderCharEmb = nn.Embedding(len(self.target_vocab.char2id), char_embedding_size, padding_idx=pad_token_idx)
 
         ### END YOUR CODE
 
@@ -44,8 +49,11 @@ class CharDecoder(nn.Module):
         """
         ### YOUR CODE HERE for part 2b
         ### TODO - Implement the forward pass of the character decoder.
+        input_emb = self.decoderCharEmb(input)
+        output, dec_hidden = self.charDecoder(input_emb, dec_hidden)
+        scores = self.char_output_projection(output)
         
-        
+        return scores, dec_hidden
         ### END YOUR CODE 
 
 
@@ -62,8 +70,18 @@ class CharDecoder(nn.Module):
         ###
         ### Hint: - Make sure padding characters do not contribute to the cross-entropy loss.
         ###       - char_sequence corresponds to the sequence x_1 ... x_{n+1} from the handout (e.g., <START>,m,u,s,i,c,<END>).
-
-
+        
+        scores, _ = self.forward(char_sequence, dec_hidden) #(length, batch, self.vocab_size)
+        #calculate p with softmax
+        P = torch.nn.functional.log_softmax(scores, dim=-1)
+        #filter paddings
+        target_masks = (char_sequence != self.target_vocab.char2id['<pad>']).float()
+        # get loss for every true label and sum them > probably with torch.gather
+        target_gold_chars_log_prob = torch.gather(P, index=char_sequence.unsqueeze(-1), dim=-1).squeeze(-1) * target_masks
+        
+        loss = -target_gold_chars_log_prob.sum()
+        
+        return loss
         ### END YOUR CODE
 
     def decode_greedy(self, initialStates, device, max_length=21):
@@ -83,7 +101,34 @@ class CharDecoder(nn.Module):
         ###      - Use torch.tensor(..., device=device) to turn a list of character indices into a tensor.
         ###      - We use curly brackets as start-of-word and end-of-word characters. That is, use the character '{' for <START> and '}' for <END>.
         ###        Their indices are self.target_vocab.start_of_word and self.target_vocab.end_of_word, respectively.
+        decodedWords = []
         
+        start_char_id = self.target_vocab.char2id["{"]
+        end_char_id = self.target_vocab.char2id["}"]
         
+        batch_size = initialStates[0].size(1)
+        output_words = torch.zeros((batch_size, max_length), dtype = torch.long)
+        dec_hidden = initialStates
+        
+        #predict next character for each timestep
+        for i in range(0, max_length):
+            current_char_ids = torch.tensor([start_char_id]*batch_size, dtype=torch.long).view(1, -1) # start token for batches (1, batch)
+            scores, dec_hidden = self.forward(current_char_ids, dec_hidden) #scores = (1, batch, self.vocab_size)
+            probs = torch.nn.functional.softmax(scores, dim=-1) # (1, batch, self.vocab_size)
+            current_char_ids = probs.argmax(dim=-1) #(1, batch)
+            output_words[:, i] = current_char_ids.squeeze(0)
+        
+        # turn chars into words with getting rid of end token
+        
+        for word in output_words.tolist():
+            filtered_word = ""
+            for char_id in word:
+                if char_id == end_char_id:
+                    break
+                filtered_word += self.target_vocab.id2char[char_id] 
+            decodedWords.append(filtered_word) 
+            
+        return decodedWords        
+
         ### END YOUR CODE
 
