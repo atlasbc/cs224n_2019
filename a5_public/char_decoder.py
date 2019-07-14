@@ -125,7 +125,8 @@ class CharDecoder(nn.Module):
             for char_id in word:
                 if char_id == end_char_id:
                     break
-                filtered_word += self.target_vocab.id2char[char_id] 
+                if char_id != start_char_id:    
+                    filtered_word += self.target_vocab.id2char[char_id] 
             decodedWords.append(filtered_word) 
             
         return decodedWords        
