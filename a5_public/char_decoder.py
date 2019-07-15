@@ -71,13 +71,16 @@ class CharDecoder(nn.Module):
         ### Hint: - Make sure padding characters do not contribute to the cross-entropy loss.
         ###       - char_sequence corresponds to the sequence x_1 ... x_{n+1} from the handout (e.g., <START>,m,u,s,i,c,<END>).
         
-        scores, _ = self.forward(char_sequence, dec_hidden) #(length, batch, self.vocab_size)
+        input = char_sequence[:-1]
+        target = char_sequence[1:]
+        
+        scores, _ = self.forward(input, dec_hidden) #(length, batch, self.vocab_size)
         #calculate p with softmax
         P = torch.nn.functional.log_softmax(scores, dim=-1)
         #filter paddings
-        target_masks = (char_sequence != self.target_vocab.char2id['<pad>']).float()
+        target_masks = (target != self.target_vocab.char2id['<pad>']).float()
         # get loss for every true label and sum them > probably with torch.gather
-        target_gold_chars_log_prob = torch.gather(P, index=char_sequence.unsqueeze(-1), dim=-1).squeeze(-1) * target_masks
+        target_gold_chars_log_prob = torch.gather(P, index=target.unsqueeze(-1), dim=-1).squeeze(-1) * target_masks
         
         loss = -target_gold_chars_log_prob.sum()
         
@@ -103,23 +106,31 @@ class CharDecoder(nn.Module):
         ###        Their indices are self.target_vocab.start_of_word and self.target_vocab.end_of_word, respectively.
         decodedWords = []
         
-        start_char_id = self.target_vocab.char2id["{"]
-        end_char_id = self.target_vocab.char2id["}"]
+        start_char_id = self.target_vocab.start_of_word
+        end_char_id = self.target_vocab.end_of_word
         
         batch_size = initialStates[0].size(1)
         output_words = torch.zeros((batch_size, max_length), dtype = torch.long)
+
+        #initiliaze first values
         dec_hidden = initialStates
+        current_char_ids = torch.tensor([start_char_id]*batch_size, dtype=torch.long).view(1, -1) # start token for batches (1, batch)
         
         #predict next character for each timestep
         for i in range(0, max_length):
-            current_char_ids = torch.tensor([start_char_id]*batch_size, dtype=torch.long).view(1, -1) # start token for batches (1, batch)
+#            print("time_step is", i)
             scores, dec_hidden = self.forward(current_char_ids, dec_hidden) #scores = (1, batch, self.vocab_size)
+            #print("char scores: row is example >", scores.squeeze(0))
             probs = torch.nn.functional.softmax(scores, dim=-1) # (1, batch, self.vocab_size)
+            #print(probs.argmax(dim=2) == current_char_ids)
             current_char_ids = probs.argmax(dim=-1) #(1, batch)
-            output_words[:, i] = current_char_ids.squeeze(0)
+#            print("predicted characters for batch", current_char_ids.squeeze(0))
+            output_words[:, i] = current_char_ids.squeeze(0) #predict (i+1)th char
+#            if i == 3:
+#                break
         
         # turn chars into words with getting rid of end token
-        
+#        print("batch size is", batch_size)
         for word in output_words.tolist():
             filtered_word = ""
             for char_id in word:
@@ -128,7 +139,9 @@ class CharDecoder(nn.Module):
                 if char_id != start_char_id:    
                     filtered_word += self.target_vocab.id2char[char_id] 
             decodedWords.append(filtered_word) 
-            
+        #print(output_words.tolist())  
+#        print("*"*50)
+#        print(initialStates)
         return decodedWords        
 
         ### END YOUR CODE
