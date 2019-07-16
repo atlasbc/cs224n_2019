@@ -110,11 +110,11 @@ class CharDecoder(nn.Module):
         end_char_id = self.target_vocab.end_of_word
         
         batch_size = initialStates[0].size(1)
-        output_words = torch.zeros((batch_size, max_length), dtype = torch.long)
+        output_words = torch.zeros((batch_size, max_length), dtype = torch.long, device=device)
 
         #initiliaze first values
         dec_hidden = initialStates
-        current_char_ids = torch.tensor([start_char_id]*batch_size, dtype=torch.long).view(1, -1) # start token for batches (1, batch)
+        current_char_ids = torch.tensor([start_char_id]*batch_size, dtype=torch.long, device=device).view(1, -1) # start token for batches (1, batch)
         
         #predict next character for each timestep
         for i in range(0, max_length):
